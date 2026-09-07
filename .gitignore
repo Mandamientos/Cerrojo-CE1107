@@ -1,0 +1,32 @@
+# Archivos generados al compilar LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+*.dvi
+*.xdv
+*.bcf
+*.run.xml
+*.figlist
+*.makefile
+*.fdb_latexmk
+
+# Vistas previas temporales
+bitacora/*-[0-9].png
+bitacora/_to_delete/
+
+# Documento de referencia de otro curso, no forma parte de este proyecto
+bitacora/Documentación-TEC-MFS.pdf
+
+# Demo de los macros de Karnaugh (los macros definitivos viven en bitacora.tex)
+bitacora/kmap-demo.*
