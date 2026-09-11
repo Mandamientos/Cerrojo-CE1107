@@ -248,4 +248,211 @@ Recorrimos las cinco señas válidas una por una y en todas la salida coincidió
 el valor esperado de la tabla de verdad, dado a que el circuito responde
 correctamente pasamos a integrarlo con el resto del diseño.
 
+\section{11 de septiembre de 2026}
+
+\subsection{Verificador de señas}
+
+En la sesión anterior dejamos el codificador funcionando bajo el supuesto de que
+la seña que le llega ya respeta el orden de los dedos, entonces el trabajo de hoy
+fue construir el bloque que se encarga de comprobar ese supuesto. El verificador
+recibe las mismas cuatro entradas de los sensores que recibe el codificador y
+produce una única salida, a la que llamamos INVALID, que se levanta cuando la
+combinación de dedos no corresponde a ninguna de las señas que el sistema acepta.
+
+Separar esta responsabilidad en un bloque propio nos permitió mantener el
+codificador mucho más limpio, limitando su trabajo únicamente a traducir la seña a
+binario y delegando la validación a un circuito aparte. Además, la salida INVALID
+no se queda encerrada en este bloque, sino que después la vamos a usar para
+bloquear el reloj, de manera que una seña mal formada no llegue nunca a guardarse
+en el registro.
+
+\subsection{Tabla de verdad y ecuación del verificador}
+
+Empezamos escribiendo la tabla de verdad completa, con las 16 combinaciones que
+pueden formar los cuatro sensores, marcando cuáles corresponden a una seña válida
+y cuáles no.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc|c|c}
+$S_1$ & $S_2$ & $S_3$ & $S_4$ & Válida & INVALID \\
+\hline
+0 & 0 & 0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1 & 0 & 1 \\
+0 & 0 & 1 & 0 & 0 & 1 \\
+0 & 0 & 1 & 1 & 0 & 1 \\
+0 & 1 & 0 & 0 & 0 & 1 \\
+0 & 1 & 0 & 1 & 0 & 1 \\
+0 & 1 & 1 & 0 & 0 & 1 \\
+0 & 1 & 1 & 1 & 0 & 1 \\
+1 & 0 & 0 & 0 & 1 & 0 \\
+1 & 0 & 0 & 1 & 0 & 1 \\
+1 & 0 & 1 & 0 & 0 & 1 \\
+1 & 0 & 1 & 1 & 0 & 1 \\
+1 & 1 & 0 & 0 & 1 & 0 \\
+1 & 1 & 0 & 1 & 0 & 1 \\
+1 & 1 & 1 & 0 & 1 & 0 \\
+1 & 1 & 1 & 1 & 1 & 0 \\
+\end{tabular}
+\caption{Tabla de verdad del verificador de señas.}
+\end{table}
+
+Viendo la tabla nos dimos cuenta de que las cinco filas válidas comparten una
+misma propiedad, y es que ningún dedo puede estar levantado si el dedo anterior no
+lo está también. Está observación nos ahorró tener que armar un mapa de Karnaugh,
+porque la condición se puede escribir directamente como tres reglas encadenadas:
+si $S_2$ está activo entonces $S_1$ tiene que estarlo, si $S_3$ está activo
+entonces $S_2$ tiene que estarlo, y si $S_4$ está activo entonces $S_3$ tiene que
+estarlo.
+
+En álgebra booleana una implicación de la forma $A \rightarrow B$ equivale a
+$\overline{A} + B$, entonces cada una de esas tres reglas nos da una suma de dos
+términos, y la seña es válida solamente cuando se cumplen las tres a la vez:
+
+\begin{align*}
+\text{VÁLIDA} &= (S_1 + \overline{S_2})(S_2 + \overline{S_3})(S_3 + \overline{S_4})
+\end{align*}
+
+Como lo que necesita el resto del circuito es la señal contraria, aplicamos De
+Morgan sobre esa expresión y obtuvimos la forma de suma de productos:
+
+\begin{align*}
+\text{INVALID} &= \overline{S_1} S_2 + \overline{S_2} S_3 + \overline{S_3} S_4
+\end{align*}
+
+Las dos ecuaciones son equivalentes y cuestan prácticamente lo mismo en
+compuertas, pero al final decidimos implementar la primera y negar el resultado,
+porque de esa forma cada compuerta del esquemático se corresponde con una de las
+tres reglas que escribimos en palabras, y eso nos hace mucho más fácil revisar el
+circuito si en algún momento deja de funcionar. El costo de esa decisión es un
+inversor adicional a la salida, el cual nos pareció un precio bastante razonable.
+
+\subsection{Implementación del verificador}
+
+El bloque quedó armado con nueve compuertas en total: tres inversores para obtener
+los complementos de $S_2$, $S_3$ y $S_4$, tres compuertas OR para las tres sumas,
+dos compuertas AND para multiplicarlas entre sí y un último inversor para producir
+INVALID. El sensor $S_1$ es el único que no necesita inversor, dado a que en la
+ecuación aparece siempre sin negar.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{img/verificador-proteus.png}
+  \caption{Implementación del verificador de señas dentro del subcircuito
+  VERIFIER.}
+\end{figure}
+
+Probamos las 16 combinaciones una por una con generadores de estado lógico y en
+las cinco señas válidas la salida se mantuvo en cero, mientras que en las otras
+once se levantó como esperábamos.
+
+\subsection{Herramientas de apoyo}
+
+Consideramos importante dejar constancia de que a lo largo del proyecto hemos
+usado un asistente de inteligencia artificial (Claude, de Anthropic) como apoyo
+para estudiar y discutir el diseño. En el caso particular del verificador, la idea
+de describir la condición de orden como una cadena de implicaciones, en lugar de
+resolver un mapa de Karnaugh de cuatro variables, salió de una de esas
+conversaciones, al igual que el paso por De Morgan para obtener la forma de suma
+de productos. El armado del circuito en Proteus, la escogencia de las compuertas y
+las pruebas de las 16 combinaciones las hicimos nosotros.
+
+\subsection{Bloque de reloj}
+
+La segunda parte de la sesión fue el bloque de reloj, que es el que le da el ritmo
+a todo el cerrojo. El problema que resuelve es el siguiente: el codificador
+entrega los tres bits de la seña al mismo tiempo, uno por cada salida, pero el
+registro de desplazamiento en donde se guarda la contraseña los recibe de a uno.
+Entonces cada vez que el usuario presiona el botón para confirmar un dígito,
+necesitamos que el circuito produzca exactamente tres pulsos de reloj, ni uno más
+ni uno menos, y que después se quede quieto hasta la siguiente pulsación.
+
+\subsection{Antirrebote del botón}
+
+Antes de poder contar pulsaciones tuvimos que limpiar la señal del botón. Un botón
+mecánico no cambia de estado de una sola vez, sino que sus contactos rebotan
+durante unos cuantos milisegundos, y para un circuito digital cada uno de esos
+rebotes es una pulsación distinta. Si dejáramos la señal cruda, una sola pulsación
+del usuario le entraría al sistema como varias.
+
+La solución fue un filtro pasa bajas seguido de un disparador de Schmitt. La
+resistencia $R_3$ de 10 k$\Omega$ trabaja también como resistencia de bajada, que
+es la que mantiene la entrada en cero mientras el botón está sin presionar, y
+junto al capacitor $C_2$ de 100 nF forma una constante de tiempo de un
+milisegundo, suficiente para que los rebotes se promedien en lugar de pasar. El
+problema es que a la salida de ese filtro la señal sube y baja de forma lenta, y
+una entrada lógica común no sabe qué hacer con un voltaje que se queda un rato en
+la zona intermedia. Por eso la pasamos por dos inversores Schmitt del 74HC14, que
+tienen umbrales distintos para subir y para bajar, lo que convierte la rampa en un
+flanco limpio. Usamos dos y no uno para que la señal salga con la misma polaridad
+con la que entró.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{img/antirrebote-proteus.png}
+  \caption{Circuito antirrebote del botón de confirmación.}
+\end{figure}
+
+\subsection{Oscilador con el NE555}
+
+Para generar los pulsos usamos un NE555 en configuración astable, que es la que
+hace que el integrado oscile solo, sin necesidad de que nadie lo dispare. La
+frecuencia depende de las dos resistencias y del capacitor de tiempo, según la
+relación:
+
+\begin{align*}
+f &= \frac{1.44}{(R_1 + 2R_2)\,C_1}
+\end{align*}
+
+Con $R_1 = 1$ k$\Omega$, $R_2 = 10$ k$\Omega$ y $C_1 = 100$ nF nos queda una
+frecuencia de aproximadamente 686 Hz, o sea un período de 1.46 ms. Eso significa
+que los tres pulsos que necesitamos para capturar un dígito se completan en unos
+4.4 ms, que es un tiempo muchísimo más corto que el que una persona tarda en
+soltar un botón, entonces el dígito siempre alcanza a entrar completo dentro de
+una misma pulsación.
+
+El capacitor $C_3$ de 10 nF que va al pin de control no participa en el cálculo de
+la frecuencia, lo que hace es aterrizar el voltaje de referencia interno del
+integrado para que el ruido de la fuente no le mueva los umbrales de comparación.
+La resistencia $R_4$ de 300 $\Omega$ a la salida limita la corriente que el 555 le
+entrega a la entrada lógica que sigue.
+
+\subsection{Contador de pulsos y señal DONE}
+
+El 555 por sí solo oscila todo el tiempo, entonces hacía falta algo que lo dejara
+pasar únicamente durante los tres pulsos que nos interesan. Eso lo resolvimos con
+un cerrojo SR armado con dos compuertas NOR realimentadas entre sí, en donde la
+entrada de encendido es la señal del botón ya limpia y la de apagado es una señal
+que llamamos DONE. Cuando el usuario presiona, el cerrojo se activa y su salida
+habilita una compuerta AND que deja pasar la oscilación del 555 hacia el resto del
+sistema. Cuando llega DONE, el cerrojo se apaga y la AND vuelve a bloquear el
+reloj.
+
+DONE la produce un contador 74HC393, del cual usamos una de sus dos mitades. El
+contador recibe el reloj ya filtrado y su entrada de reinicio va conectada a la
+señal del botón invertida, lo que hace que mientras el botón esté suelto el
+contador se mantenga en cero, y que empiece a contar apenas se presiona. Con una
+compuerta AND entre sus salidas $Q_0$ y $Q_1$ detectamos el valor tres, que es
+justo la cantidad de pulsos que queremos, y esa detección es la que apaga el
+cerrojo.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{img/reloj-proteus.png}
+  \caption{Bloque de reloj completo, con el oscilador, el cerrojo de habilitación
+  y el contador que genera la señal DONE.}
+\end{figure}
+
+Un detalle que nos resultó cómodo es que DONE no solo sirve para frenar el reloj.
+Cuando el usuario suelta el botón, el contador se reinicia y DONE se cae, y ese
+flanco de bajada es una señal perfectamente limpia que ocurre una única vez por
+dígito ingresado. Más adelante la vamos a aprovechar como reloj del contador de
+dígitos, que es el que lleva la cuenta de cuántos números de la contraseña van
+entrados.
+
+Simulamos el bloque completo y verificamos con el osciloscopio que por cada
+pulsación del botón salen tres flancos y nada más, sin importar cuánto tiempo se
+mantenga presionado. Es por ello que consideramos el bloque terminado y en la
+próxima sesión lo vamos a conectar con el serializador.
+
 \end{document}
