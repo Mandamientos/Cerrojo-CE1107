@@ -253,24 +253,24 @@ correctamente pasamos a integrarlo con el resto del diseño.
 \subsection{Verificador de señas}
 
 En la sesión anterior dejamos el codificador funcionando bajo el supuesto de que
-la seña que le llega ya respeta el orden de los dedos, entonces el trabajo de hoy
-fue construir el bloque que se encarga de comprobar ese supuesto. El verificador
-recibe las mismas cuatro entradas de los sensores que recibe el codificador y
-produce una única salida, a la que llamamos INVALID, que se levanta cuando la
-combinación de dedos no corresponde a ninguna de las señas que el sistema acepta.
+la seña que le llega ya respeta el orden de los dedos, por lo que el trabajo de
+hoy fue construir el bloque que se encarga de comprobar ese supuesto. El VERIFIER
+recibe las mismas cuatro entradas de los sensores que recibe el ENCODER y produce
+una única salida, a la cual llamamos INVALID, que se levanta cuando la combinación
+de dedos no corresponde a ninguna de las señas que el sistema acepta.
 
-Separar esta responsabilidad en un bloque propio nos permitió mantener el
+Separar esta responsabilidad en un bloque aparte nos permitió mantener el
 codificador mucho más limpio, limitando su trabajo únicamente a traducir la seña a
-binario y delegando la validación a un circuito aparte. Además, la salida INVALID
-no se queda encerrada en este bloque, sino que después la vamos a usar para
-bloquear el reloj, de manera que una seña mal formada no llegue nunca a guardarse
-en el registro.
+binario y delegando la validación a un circuito propio. Además aunado a ello, la
+salida INVALID no se queda encerrada dentro del bloque, sino que más adelante la
+vamos a utilizar para bloquear el reloj, de manera que una seña mal formada no
+alcance a guardarse en el registro.
 
 \subsection{Tabla de verdad y ecuación del verificador}
 
 Empezamos escribiendo la tabla de verdad completa, con las 16 combinaciones que
-pueden formar los cuatro sensores, marcando cuáles corresponden a una seña válida
-y cuáles no.
+pueden formar los cuatro sensores, en donde marcamos cuáles corresponden a una
+seña válida y cuáles no.
 
 \begin{table}[H]
 \centering
@@ -297,43 +297,45 @@ $S_1$ & $S_2$ & $S_3$ & $S_4$ & Válida & INVALID \\
 \caption{Tabla de verdad del verificador de señas.}
 \end{table}
 
-Viendo la tabla nos dimos cuenta de que las cinco filas válidas comparten una
-misma propiedad, y es que ningún dedo puede estar levantado si el dedo anterior no
-lo está también. Está observación nos ahorró tener que armar un mapa de Karnaugh,
-porque la condición se puede escribir directamente como tres reglas encadenadas:
-si $S_2$ está activo entonces $S_1$ tiene que estarlo, si $S_3$ está activo
-entonces $S_2$ tiene que estarlo, y si $S_4$ está activo entonces $S_3$ tiene que
-estarlo.
+Al revisar la tabla nos dimos cuenta de que las cinco filas válidas comparten una
+misma propiedad, la cual es que ningún dedo puede estar levantado si el dedo
+anterior no lo está también, y está observación nos ahorró tener que armar un mapa
+de Karnaugh de cuatro variables, debido a que la condición se puede escribir
+directamente como tres reglas encadenadas: si $S_2$ está activo entonces $S_1$
+tiene que estarlo, si $S_3$ está activo entonces $S_2$ tiene que estarlo, y si
+$S_4$ está activo entonces $S_3$ tiene que estarlo.
 
 En álgebra booleana una implicación de la forma $A \rightarrow B$ equivale a
-$\overline{A} + B$, entonces cada una de esas tres reglas nos da una suma de dos
-términos, y la seña es válida solamente cuando se cumplen las tres a la vez:
+$\overline{A} + B$, por lo que cada una de esas tres reglas nos da una suma de dos
+términos, y la seña es válida solamente cuando se cumplen las tres al mismo
+tiempo:
 
 \begin{align*}
 \text{VÁLIDA} &= (S_1 + \overline{S_2})(S_2 + \overline{S_3})(S_3 + \overline{S_4})
 \end{align*}
 
-Como lo que necesita el resto del circuito es la señal contraria, aplicamos De
-Morgan sobre esa expresión y obtuvimos la forma de suma de productos:
+Como lo que necesita el resto del circuito es la señal contraria, se aplicó De
+Morgan sobre esa expresión, con lo que obtuvimos la forma de suma de productos:
 
 \begin{align*}
 \text{INVALID} &= \overline{S_1} S_2 + \overline{S_2} S_3 + \overline{S_3} S_4
 \end{align*}
 
 Las dos ecuaciones son equivalentes y cuestan prácticamente lo mismo en
-compuertas, pero al final decidimos implementar la primera y negar el resultado,
-porque de esa forma cada compuerta del esquemático se corresponde con una de las
-tres reglas que escribimos en palabras, y eso nos hace mucho más fácil revisar el
-circuito si en algún momento deja de funcionar. El costo de esa decisión es un
-inversor adicional a la salida, el cual nos pareció un precio bastante razonable.
+compuertas, sin embargo se decidió a implementar la primera y negar el resultado
+al final, debido a que de esa forma cada compuerta del esquemático se corresponde
+con una de las tres reglas que escribimos en palabras, lo que nos hace mucho más
+fácil revisar el circuito si en algún momento deja de funcionar. El costo de esa
+decisión es un inversor adicional a la salida, el cual nos pareció un precio más
+que razonable.
 
 \subsection{Implementación del verificador}
 
-El bloque quedó armado con nueve compuertas en total: tres inversores para obtener
-los complementos de $S_2$, $S_3$ y $S_4$, tres compuertas OR para las tres sumas,
-dos compuertas AND para multiplicarlas entre sí y un último inversor para producir
-INVALID. El sensor $S_1$ es el único que no necesita inversor, dado a que en la
-ecuación aparece siempre sin negar.
+El bloque quedó armado con nueve compuertas en total, las cuales son tres
+inversores para obtener los complementos de $S_2$, $S_3$ y $S_4$, tres compuertas
+OR para las tres sumas, dos compuertas AND para multiplicarlas entre sí y un
+último inversor para producir INVALID. El sensor $S_1$ es el único que no necesita
+inversor, dado a que en la ecuación aparece siempre sin negar.
 
 \begin{figure}[H]
   \centering
@@ -342,9 +344,9 @@ ecuación aparece siempre sin negar.
   VERIFIER.}
 \end{figure}
 
-Probamos las 16 combinaciones una por una con generadores de estado lógico y en
-las cinco señas válidas la salida se mantuvo en cero, mientras que en las otras
-once se levantó como esperábamos.
+Probamos las 16 combinaciones una por una con generadores de estado lógico, en
+donde las cinco señas válidas mantuvieron la salida en cero, mientras que las
+otras once la levantaron tal como lo esperábamos.
 
 \subsection{Herramientas de apoyo}
 
@@ -359,33 +361,32 @@ las pruebas de las 16 combinaciones las hicimos nosotros.
 
 \subsection{Bloque de reloj}
 
-La segunda parte de la sesión fue el bloque de reloj, que es el que le da el ritmo
-a todo el cerrojo. El problema que resuelve es el siguiente: el codificador
-entrega los tres bits de la seña al mismo tiempo, uno por cada salida, pero el
-registro de desplazamiento en donde se guarda la contraseña los recibe de a uno.
-Entonces cada vez que el usuario presiona el botón para confirmar un dígito,
-necesitamos que el circuito produzca exactamente tres pulsos de reloj, ni uno más
-ni uno menos, y que después se quede quieto hasta la siguiente pulsación.
+La segunda parte de la sesión fue el bloque de reloj, el cual es el que le da el
+ritmo a todo el cerrojo. De lo que se encarga es de producir exactamente tres
+pulsos cada vez que el usuario presiona el botón para confirmar un dígito, ni uno
+más ni uno menos, y de quedarse quieto hasta la siguiente pulsación, dado a que
+cada dígito de la contraseña son tres bits y el registro de desplazamiento los
+recibe de uno en uno.
 
 \subsection{Antirrebote del botón}
 
-Antes de poder contar pulsaciones tuvimos que limpiar la señal del botón. Un botón
-mecánico no cambia de estado de una sola vez, sino que sus contactos rebotan
-durante unos cuantos milisegundos, y para un circuito digital cada uno de esos
-rebotes es una pulsación distinta. Si dejáramos la señal cruda, una sola pulsación
-del usuario le entraría al sistema como varias.
+Antes de poder contar pulsaciones tuvimos que limpiar la señal del botón, debido a
+que un botón mecánico no cambia de estado de una sola vez, sino que sus contactos
+rebotan durante unos cuantos milisegundos, y para un circuito digital cada uno de
+esos rebotes es una pulsación distinta, por lo que si dejáramos la señal cruda una
+sola pulsación del usuario le entraría al sistema como varias.
 
-La solución fue un filtro pasa bajas seguido de un disparador de Schmitt. La
-resistencia $R_3$ de 10 k$\Omega$ trabaja también como resistencia de bajada, que
-es la que mantiene la entrada en cero mientras el botón está sin presionar, y
+Se implementó un filtro pasa bajas seguido de un disparador de Schmitt. La
+resistencia $R_3$ de 10 k$\Omega$ trabaja también como resistencia de bajada, la
+cual es la que mantiene la entrada en cero mientras el botón está sin presionar, y
 junto al capacitor $C_2$ de 100 nF forma una constante de tiempo de un
-milisegundo, suficiente para que los rebotes se promedien en lugar de pasar. El
-problema es que a la salida de ese filtro la señal sube y baja de forma lenta, y
-una entrada lógica común no sabe qué hacer con un voltaje que se queda un rato en
-la zona intermedia. Por eso la pasamos por dos inversores Schmitt del 74HC14, que
-tienen umbrales distintos para subir y para bajar, lo que convierte la rampa en un
-flanco limpio. Usamos dos y no uno para que la señal salga con la misma polaridad
-con la que entró.
+milisegundo, que nos pareció más que suficiente para que los rebotes se promedien
+en lugar de pasar. El problema de este filtro es que a su salida la señal sube y
+baja de forma lenta, y una entrada lógica común no sabe qué hacer con un voltaje
+que se queda un rato en la zona intermedia, es por ello que la pasamos por dos
+inversores Schmitt del 74HC14, los cuales tienen umbrales distintos para subir y
+para bajar, lo que convierte la rampa en un flanco limpio. Utilizamos dos y no uno
+para que la señal salga con la misma polaridad con la que entró.
 
 \begin{figure}[H]
   \centering
@@ -395,44 +396,44 @@ con la que entró.
 
 \subsection{Oscilador con el NE555}
 
-Para generar los pulsos usamos un NE555 en configuración astable, que es la que
-hace que el integrado oscile solo, sin necesidad de que nadie lo dispare. La
-frecuencia depende de las dos resistencias y del capacitor de tiempo, según la
-relación:
+Para generar los pulsos utilizamos un NE555 en configuración astable, la cual es
+la que hace que el integrado oscile por sí solo, sin necesidad de que nadie lo
+dispare. La frecuencia depende de las dos resistencias y del capacitor de tiempo,
+según la siguiente relación:
 
 \begin{align*}
 f &= \frac{1.44}{(R_1 + 2R_2)\,C_1}
 \end{align*}
 
 Con $R_1 = 1$ k$\Omega$, $R_2 = 10$ k$\Omega$ y $C_1 = 100$ nF nos queda una
-frecuencia de aproximadamente 686 Hz, o sea un período de 1.46 ms. Eso significa
-que los tres pulsos que necesitamos para capturar un dígito se completan en unos
-4.4 ms, que es un tiempo muchísimo más corto que el que una persona tarda en
-soltar un botón, entonces el dígito siempre alcanza a entrar completo dentro de
-una misma pulsación.
+frecuencia de aproximadamente 686 Hz, es decir un período de 1.46 ms, lo que
+significa que los tres pulsos que necesitamos para capturar un dígito se completan
+en unos 4.4 ms, que es un tiempo muchísimo más corto que el que una persona tarda
+en soltar un botón, por lo que el dígito siempre alcanza a entrar completo dentro
+de una misma pulsación.
 
 El capacitor $C_3$ de 10 nF que va al pin de control no participa en el cálculo de
-la frecuencia, lo que hace es aterrizar el voltaje de referencia interno del
-integrado para que el ruido de la fuente no le mueva los umbrales de comparación.
-La resistencia $R_4$ de 300 $\Omega$ a la salida limita la corriente que el 555 le
-entrega a la entrada lógica que sigue.
+la frecuencia, de lo que se encarga es de aterrizar el voltaje de referencia
+interno del integrado para que el ruido de la fuente no le mueva los umbrales de
+comparación, y la resistencia $R_4$ de 300 $\Omega$ a la salida limita la
+corriente que el 555 le entrega a la entrada lógica que sigue.
 
 \subsection{Contador de pulsos y señal DONE}
 
-El 555 por sí solo oscila todo el tiempo, entonces hacía falta algo que lo dejara
-pasar únicamente durante los tres pulsos que nos interesan. Eso lo resolvimos con
-un cerrojo SR armado con dos compuertas NOR realimentadas entre sí, en donde la
-entrada de encendido es la señal del botón ya limpia y la de apagado es una señal
-que llamamos DONE. Cuando el usuario presiona, el cerrojo se activa y su salida
-habilita una compuerta AND que deja pasar la oscilación del 555 hacia el resto del
-sistema. Cuando llega DONE, el cerrojo se apaga y la AND vuelve a bloquear el
-reloj.
+El 555 por sí solo oscila todo el tiempo, por lo que hacía falta algo que lo
+dejara pasar únicamente durante los tres pulsos que nos interesan, lo cual
+resolvimos con un cerrojo SR armado con dos compuertas NOR realimentadas entre sí,
+en donde la entrada de encendido es la señal del botón ya limpia y la de apagado
+es una señal a la cual llamamos DONE. Cuando el usuario presiona, el cerrojo se
+activa y su salida habilita una compuerta AND que deja pasar la oscilación del 555
+hacia el resto del sistema, y cuando llega DONE el cerrojo se apaga y la AND
+vuelve a bloquear el reloj.
 
-DONE la produce un contador 74HC393, del cual usamos una de sus dos mitades. El
-contador recibe el reloj ya filtrado y su entrada de reinicio va conectada a la
+DONE la produce un contador 74HC393, del cual utilizamos una de sus dos mitades.
+El contador recibe el reloj ya filtrado y su entrada de reinicio va conectada a la
 señal del botón invertida, lo que hace que mientras el botón esté suelto el
-contador se mantenga en cero, y que empiece a contar apenas se presiona. Con una
-compuerta AND entre sus salidas $Q_0$ y $Q_1$ detectamos el valor tres, que es
+contador se mantenga en cero y que empiece a contar apenas se presiona. Con una
+compuerta AND entre sus salidas $Q_0$ y $Q_1$ detectamos el valor tres, el cual es
 justo la cantidad de pulsos que queremos, y esa detección es la que apaga el
 cerrojo.
 
@@ -443,16 +444,151 @@ cerrojo.
   y el contador que genera la señal DONE.}
 \end{figure}
 
-Un detalle que nos resultó cómodo es que DONE no solo sirve para frenar el reloj.
-Cuando el usuario suelta el botón, el contador se reinicia y DONE se cae, y ese
-flanco de bajada es una señal perfectamente limpia que ocurre una única vez por
-dígito ingresado. Más adelante la vamos a aprovechar como reloj del contador de
-dígitos, que es el que lleva la cuenta de cuántos números de la contraseña van
-entrados.
+Un detalle que consideramos importante anotar es que DONE no solo sirve para
+frenar el reloj, ya que cuando el usuario suelta el botón el contador se reinicia
+y DONE se cae, y ese flanco de bajada es una señal perfectamente limpia que ocurre
+una única vez por cada dígito ingresado, la cual más adelante vamos a aprovechar
+como reloj del contador de dígitos, que es el que lleva la cuenta de cuántos
+números de la contraseña van entrados.
 
 Simulamos el bloque completo y verificamos con el osciloscopio que por cada
 pulsación del botón salen tres flancos y nada más, sin importar cuánto tiempo se
-mantenga presionado. Es por ello que consideramos el bloque terminado y en la
-próxima sesión lo vamos a conectar con el serializador.
+mantenga presionado, es por ello que consideramos el bloque terminado y de una vez
+pasamos a conectarlo con el serializador.
+
+\subsection{Serializador}
+
+El serializador es el bloque que conecta al ENCODER con la memoria del cerrojo, y
+de lo que se encarga es de tomar los tres bits que el codificador entrega al mismo
+tiempo y pasárselos al registro de desplazamiento de uno en uno, dado a que este
+último no los puede recibir de ninguna otra forma.
+
+Para esto utilizamos un multiplexor 74HC4052, al cual le conectamos $B_0$, $B_1$ y
+$B_2$ en los canales X0, X1 y X2, y del cual obtenemos un único bit por el pin X,
+que es el que alimenta la entrada de datos del primer registro. Las entradas A y B
+del integrado son las que deciden cuál de los canales se deja pasar, por lo que
+necesitábamos algo que nos las fuera cambiando en cada pulso de reloj.
+
+En primera instancia pensábamos armar un contador aparte para manejar esas dos
+entradas, pero después nos dimos cuenta de que el contador que ya habíamos hecho
+en el bloque de reloj nos servía igual, debido a que mientras cuenta los tres
+pulsos sus salidas $Q_0$ y $Q_1$ van tomando los valores 0, 1 y 2, que son
+justamente los números de canal que necesitamos. Es por ello que se decidió a
+reutilizarlo, lo que nos permitió resolver la selección sin agregarle ni una
+compuerta adicional al circuito.
+
+El cuarto canal (X3) no lo utiliza el proyecto, sin embargo lo conectamos a tierra
+en lugar de dejarlo al aire, y lo mismo hicimos con el banco Y completo, el cual es
+la otra mitad del multiplexor que tampoco ocupamos. La entrada INH también va a
+tierra, dado a que es la que habilita el integrado y la necesitamos activa todo el
+tiempo.
+
+\subsection{Filtrado del reloj}
+
+En este bloque fue en donde conectamos por fin la salida del verificador. La señal
+que les llega a los registros no es el reloj crudo que produce el NE555, sino una
+versión filtrada a la que llamamos FILTERED\_CLK, la cual se corta mientras la
+seña que está haciendo el usuario no sea válida, lo que impide que una combinación
+mal formada alcance a guardarse en la memoria.
+
+Se implementó con un inversor y una compuerta NOR, cuyo comportamiento queda
+descrito por la siguiente ecuación:
+
+\begin{align*}
+\text{FILTERED\_CLK} &= \overline{\overline{\text{CLK}} + \text{INVALID}}
+= \text{CLK} \cdot \overline{\text{INVALID}}
+\end{align*}
+
+Es decir que el pulso pasa únicamente cuando hay reloj y además la seña es válida.
+Se utilizó una NOR y no una AND seguida de un inversor, debido a que de está forma
+nos ahorramos una compuerta, dado a que el inversor de la entrada lo íbamos a
+necesitar de todas maneras.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.65\textwidth]{img/clkgating-proteus.png}
+  \caption{Filtrado del reloj con la señal INVALID del verificador.}
+\end{figure}
+
+Hay un detalle de sincronización que consideramos importante dejar anotado. El
+contador 74HC393 avanza con los flancos de bajada del reloj, mientras que los
+registros CD4015 guardan el bit con los flancos de subida, por lo que primero sube
+el reloj y el registro captura el bit que el multiplexor tiene seleccionado en ese
+momento, y solo después baja el reloj y el contador pasa al siguiente canal. Las
+dos cosas nunca ocurren al mismo tiempo, lo que le da al multiplexor tiempo de
+sobra para estabilizarse antes de que le pidan el dato.
+
+\subsection{Cadena de registros de desplazamiento}
+
+La contraseña son nueve bits, los cuales salen de tres dígitos de tres bits cada
+uno. Para guardarlos utilizamos registros CD4015, quiénes traen dos registros de
+cuatro etapas dentro de un mismo integrado, entonces con tres mitades llegamos a
+doce etapas, de las cuales ocupamos nueve.
+
+La cadena se arma conectando la última salida de un registro con la entrada de
+datos del siguiente. Un detalle del CD4015 que hay que tener presente a la hora de
+cablearlo es que esa última salida no sigue la secuencia de los pines, ya que en
+una mitad las salidas van por los pines 13, 12, 11 y la cuarta salta al pin 2,
+mientras que en la otra van por el 5, 4, 3 y la cuarta salta al pin 10. Esos dos
+pines son precisamente los que llevan el encadenamiento, es por ello que los
+dejamos anotados desde ahora para no equivocarnos cuando armemos el circuito en
+físico.
+
+Las entradas de reinicio de los tres registros las conectamos a tierra. En primera
+instancia las íbamos a conectar a la misma señal de reinicio que usa el contador,
+pero al analizarlo nos dimos cuenta de que no hacía falta, debido a que un
+registro de desplazamiento se limpia solo, ya que después de nueve
+desplazamientos cualquier bit viejo ya salió de las nueve etapas que nos
+interesan, por lo que lo único que queda guardado son los nueve bits que el
+usuario acaba de ingresar. Esto funciona porque el reloj filtrado y el contador
+van amarrados entre sí, es decir que siempre son exactamente tres desplazamientos
+por cada dígito.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{img/serializador-proteus.png}
+  \caption{Serializador completo, con el multiplexor y la cadena de tres
+  registros de desplazamiento.}
+\end{figure}
+
+\subsection{Orden de los bits en el registro}
+
+La parte que más nos costó de todo el bloque fue determinar en qué orden quedan
+guardados los bits. En un registro de desplazamiento el primer bit que entra es el
+que más lejos viaja, dado a que los que vienen atrás lo van empujando, por lo que
+cuando terminan los nueve desplazamientos el bit del primer dígito queda en la
+última etapa y el del último dígito queda en la primera, es decir que la
+contraseña se guarda al revés de como se ingresó.
+
+Para no confundirnos armamos la siguiente tabla, la cual es la referencia que
+vamos a utilizar de aquí en adelante para saber qué contiene cada salida. La
+numeración de las etiquetas no sigue un patrón evidente, debido a que salió de
+acomodarlas al orden en que las necesita el comparador, es por ello que la tabla
+es la única fuente confiable.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c|c|c|c|c}
+Etapa & Salida & Etiqueta & Contenido & Valor en 2-4-1 \\
+\hline
+1 & U55:A $Q_0$ (13) & $R_7$ & Dígito 3, bit $B_2$ & 0 \\
+2 & U55:A $Q_1$ (12) & $R_8$ & Dígito 3, bit $B_1$ & 0 \\
+3 & U55:A $Q_2$ (11) & $R_9$ & Dígito 3, bit $B_0$ & 1 \\
+4 & U55:A $Q_3$ (2)  & $R_4$ & Dígito 2, bit $B_2$ & 1 \\
+5 & U55:B $Q_0$ (5)  & $R_5$ & Dígito 2, bit $B_1$ & 0 \\
+6 & U55:B $Q_1$ (4)  & $R_6$ & Dígito 2, bit $B_0$ & 0 \\
+7 & U55:B $Q_2$ (3)  & $R_3$ & Dígito 1, bit $B_2$ & 0 \\
+8 & U55:B $Q_3$ (10) & $R_2$ & Dígito 1, bit $B_1$ & 1 \\
+9 & U56:A $Q_0$ (13) & $R_1$ & Dígito 1, bit $B_0$ & 0 \\
+\end{tabular}
+\caption{Contenido de cada etapa del registro después de ingresar tres dígitos,
+con los valores que corresponden a la contraseña 2-4-1.}
+\end{table}
+
+La última columna la calculamos a mano para poder comprobar el bloque, en donde el
+dígito 2 en binario es 010, el 4 es 100 y el 1 es 001. Ingresando esa secuencia en
+la simulación las nueve salidas tenían que quedar exactamente como dice la tabla y
+así fue, con lo cual quedamos seguros de que el orden que dedujimos es el correcto
+y ya podemos utilizar estas etiquetas para armar el comparador de la contraseña.
 
 \end{document}
