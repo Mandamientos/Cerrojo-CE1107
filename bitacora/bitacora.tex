@@ -591,4 +591,191 @@ la simulación las nueve salidas tenían que quedar exactamente como dice la tab
 así fue, con lo cual quedamos seguros de que el orden que dedujimos es el correcto
 y ya podemos utilizar estas etiquetas para armar el comparador de la contraseña.
 
+\section{13 de septiembre de 2026}
+
+\subsection{Controlador de estados}
+
+El STATE CONTROLLER es el bloque encargado de decidir qué hace el cerrojo. Recibe
+DONE del reloj, CORRECT? del comparador y las dos señales de los finales de
+carrera, y con eso determinará en cuál de cuatro situaciones se encuentra el
+aparato, las cuales quedan codificadas en dos bits que llamamos $E_1$ y $E_0$.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c|c|c|c|c|c}
+COMPLETE? & CORRECT? & OPENED? & $E_1$ & $E_0$ & Situación \\
+\hline
+0 & X & X & 0 & 0 & Leyendo \\
+1 & 0 & X & 0 & 1 & Seña inválida \\
+1 & 1 & 0 & 1 & 0 & Abriendo \\
+1 & 1 & 1 & 1 & 1 & Cerrando \\
+\end{tabular}
+\caption{Estados del cerrojo y su codificación en dos bits.}
+\end{table}
+
+Este bloque necesita dos datos que ninguno de sus vecinos le entrega, que son la
+cantidad de dígitos ingresados y la posición de la puerta, es por ello que adentro
+del controlador hay dos circuitos con memoria que trabajan antes de la lógica de
+estados.
+
+\subsection{Contador de dígitos}
+
+El reloj entrega DONE cada vez que termina de capturar un dígito, entonces
+contando esos pulsos el bloque sabrá cuántos van. Para esto utilizamos la mitad
+libre del 74HC393, dado a que ese integrado trae dos contadores adentro y en el
+bloque de reloj solo ocupamos uno.
+
+Una compuerta AND entre las salidas $S_0$ y $S_1$ detecta el valor tres y produce
+la señal COMPLETE?, lo que permite avisarle al resto del bloque que ya hay una
+contraseña completa esperando a ser evaluada.
+
+\subsection{Cerrojo de posición de la puerta}
+
+Mientras la puerta va en camino ninguno de los dos finales de carrera está
+presionado, por lo que el sistema necesita recordar en dónde quedó.
+
+Armamos un cerrojo SR con dos compuertas NOR realimentadas entre sí, en donde
+SW\_OPEN lo enciende y SW\_CLOSED lo apaga. Su salida OPENED? se mantendrá fija en
+el último valor mientras ninguno de los dos interruptores esté presionado.
+
+\subsection{Monoestable de reinicio}
+
+En primera instancia el reinicio del contador se iba a conectar directamente a los
+dos finales de carrera, o sea MR = SW\_OPEN + SW\_CLOSED, pero al analizarlo nos
+dimos cuenta de que la puerta se queda descansando encima de uno de los dos
+interruptores, por lo que esa señal quedaría levantada de forma permanente y el
+contador no podría contar nunca.
+
+Es por ello que se decidió a convertir ese nivel en un pulso corto, utilizando un
+monoestable armado con un capacitor y un disparador de Schmitt. El capacitor $C_4$
+va en serie y la resistencia $R_7$ a tierra, que es al revés del antirrebote, lo
+que permite que el circuito deje pasar únicamente el instante del cambio.
+
+Con $R_7$ de 10 k$\Omega$ y $C_4$ de 100 nF el pulso queda de aproximadamente un
+milisegundo. La resistencia $R_8$ de 1 k$\Omega$ que sigue al capacitor protege la
+entrada del integrado y no participa en ese cálculo.
+
+El monoestable se disparará en tres situaciones, las cuales se juntan con
+compuertas OR antes del capacitor: cuando la puerta llega al extremo abierto,
+cuando llega al cerrado, y cuando el usuario presiona el botón teniendo una
+contraseña completa ya evaluada.
+
+Está última condición se agregó después de encontrar un error en la simulación, en
+donde una contraseña equivocada dejaba el contador en tres y en la siguiente
+pulsación el conteo seguía subiendo en lugar de reiniciarse, con lo que el
+contador terminaba desfasado del registro de desplazamiento. Con el tercer disparo
+el contador se limpia apenas el usuario vuelve a presionar.
+
+\subsection{Ecuaciones de estado}
+
+Con COMPLETE?, CORRECT? y OPENED? ya disponibles, los dos bits salen de estas dos
+expresiones:
+
+\begin{align*}
+E_1 &= \text{COMPLETE?} \cdot \text{CORRECT?} \\
+E_0 &= \text{COMPLETE?} \cdot (\text{OPENED?} + \overline{\text{CORRECT?}})
+\end{align*}
+
+Las dos llevan COMPLETE? multiplicando, lo que permite que mientras no haya una
+contraseña completa el estado se mantenga en 00, que es el de lectura. Cuando sí
+la hay, $E_1$ se levanta únicamente si la contraseña resultó correcta, entonces
+ese bit significa por sí solo que la puerta se moverá.
+
+$E_0$ se levanta en dos casos, ya sea porque la contraseña estuvo mala, que da el
+estado 01, o porque estuvo buena pero la puerta ya estaba abierta, que da el 11 y
+corresponde a cerrarla.
+
+\subsection{Salidas hacia el motor}
+
+\begin{align*}
+\text{OPENING} &= E_1 \cdot \overline{\text{OPENED?}} \\
+\text{CLOSING} &= E_1 \cdot \text{OPENED?}
+\end{align*}
+
+Las dos salen de $E_1$ y no de la combinación completa de los dos bits, debido a
+que $E_1$ ya significa que la puerta se moverá y lo único que falta decidir es
+hacia dónde, cosa que responde OPENED?.
+
+Además aunado a ello, escritas de está forma quedan mutuamente excluyentes por
+construcción, lo cual es importante dado a que estas dos señales manejarán el
+puente H del motor.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{img/statectrl-proteus.png}
+  \caption{Interior del STATE CONTROLLER, con el monoestable de reinicio, el
+  cerrojo de posición, el contador de dígitos y la lógica de estados.}
+\end{figure}
+
+\subsection{Decodificador de anuncios}
+
+El decodificador de anuncios traduce los dos bits del estado a las siete señales
+del display, lo que permite que el usuario sepa qué está pasando en cada momento.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c|c|ccccccc}
+$E_1E_0$ & Letra & a & b & c & d & e & f & g \\
+\hline
+00 & L & 0 & 0 & 0 & 1 & 1 & 1 & 0 \\
+01 & E & 1 & 0 & 0 & 1 & 1 & 1 & 1 \\
+10 & A & 1 & 1 & 1 & 0 & 1 & 1 & 1 \\
+11 & C & 1 & 0 & 0 & 1 & 1 & 1 & 0 \\
+\end{tabular}
+\caption{Segmentos que se encienden en cada una de las cuatro letras.}
+\end{table}
+
+En primera instancia los siete segmentos se iban a resolver con puras compuertas a
+partir de $E_1$ y $E_0$, pero al final se decidió a meter antes un decodificador
+74HC238, el cual toma los dos bits y levanta una sola de sus salidas $Y_0$ a $Y_3$
+según el estado.
+
+Sus dos habilitaciones activas en bajo van a tierra, la activa en alto va a VCC, y
+la entrada C también a tierra porque solo ocupamos cuatro de sus ocho salidas.
+Trabajar sobre esas cuatro señales en lugar de sobre los dos bits nos permitió
+dejar las ecuaciones mucho más fáciles de leer, ya que cada segmento se convierte
+en la lista de los estados en los que tiene que encenderse:
+
+\begin{align*}
+a &= \overline{Y_0} & b = c &= Y_2 \\
+d &= Y_0 + Y_1 + Y_3 & g &= \overline{Y_0}\,Y_1 + Y_2 \\
+e &= f = 1
+\end{align*}
+
+Los segmentos e y f están encendidos en las cuatro letras, entonces no necesitan
+ni una compuerta y se conectan directo a VCC con su resistencia, dado a que las
+letras L, E, A y C, quiénes son las únicas que el display mostrará, comparten el
+lado izquierdo completo.
+
+Revisando el circuito ya armado encontramos que $g$ se puede reducir, debido a que
+las salidas del decodificador son mutuamente excluyentes y el término
+$\overline{Y_0}$ no aporta nada, quedando la expresión en $Y_1 + Y_2$. Aplicarlo
+libera un inversor y una compuerta AND, y se hará antes del armado físico.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{img/decoder-proteus.png}
+  \caption{Interior del decodificador de anuncios, con el 74HC238 y la lógica de
+  los siete segmentos.}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{img/display-proteus.png}
+  \caption{Bloque del decodificador conectado al display de siete segmentos.}
+\end{figure}
+
+\subsection{Simulación}
+
+Recorrimos los cuatro estados uno por uno en la simulación y en todos el display
+mostró la letra que le corresponde. También comprobamos que OPENING y CLOSING
+nunca se levantan al mismo tiempo.
+
+Después de una contraseña equivocada el sistema vuelve a quedar listo apenas se
+presiona el botón, que era el comportamiento que fallaba antes de agregarle el
+tercer disparo al monoestable.
+
+Con esto el diseño digital del cerrojo queda completo, lo que permite empezar a
+repartir el trabajo para armarlo en físico.
+
 \end{document}
