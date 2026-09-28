@@ -1,0 +1,181 @@
+\documentclass[10pt,journal]{IEEEtran}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{url}
+\usepackage{cite}
+\usepackage{microtype}
+
+\addto\captionsspanish{\renewcommand{\abstractname}{Abstract}}
+\renewcommand{\IEEEkeywordsname}{Keywords}
+
+\begin{document}
+
+\title{Diseño de un cerrojo digital basado en lógica combinacional, secuencial y registro de contraseña}
+
+\author{Guillermo~Sánchez~Cedeño~y~Kendall~Fernández~Obando% 
+\thanks{Los autores pertenecen a la Escuela de Ingeniería en Computadores, Instituto Tecnológico de Costa Rica. El trabajo fue desarrollado en el curso CE1107: Fundamentos de Arquitectura de Computadores, II semestre de 2026.}%
+}
+
+\maketitle
+
+\begin{abstract}
+This paper presents the design and simulation of a digital lock implemented with discrete CMOS logic and a sequence of state-dependent operations. The system receives user input through four finger sensors, encodes valid gestures into three-bit values, rejects nonconsecutive finger combinations, serializes a three-digit password into a nine-bit shift-register chain, and controls a motor according to the evaluated password and door position. The developed architecture separates combinational, timing, storage, and control functions into independent blocks, including a gesture encoder, gesture verifier, pulse-generation stage, serializer, password storage, state controller, and seven-segment display decoder. Timing reliability is supported by mechanical-button debouncing, a 555 astable oscillator, and a counter that limits each confirmation to exactly three clock pulses. Simulation results in Proteus verified all five valid gestures, all sixteen verifier input combinations, the expected nine-bit ordering for a representative password, the four controller states, the mutual exclusion of opening and closing commands, and the recovery of the input sequence after an incorrect password. The results demonstrate that the proposed decomposition provides a traceable implementation of the specified lock behavior and facilitates verification of each functional block before physical assembly.
+\end{abstract}
+
+\begin{IEEEkeywords}
+digital lock, combinational logic, sequential logic, shift register, finite-state control, CMOS logic.
+\end{IEEEkeywords}
+
+\section{Introducción}
+Un cerrojo digital requiere convertir una entrada humana en una representación binaria, conservar una secuencia de datos, determinar si dicha secuencia coincide con una contraseña y producir acciones de apertura o cierre. En una implementación discreta, estas funciones deben coordinarse mediante lógica combinacional y secuencial, además de un mecanismo de temporización que transforme una pulsación del usuario en una cantidad controlada de eventos de reloj.
+
+El diseño documentado utiliza cuatro sensores de dedos para representar los valores de 0 a 4 mediante combinaciones ordenadas. De las 16 combinaciones posibles de cuatro entradas, cinco corresponden a señas válidas, mientras que las restantes deben ser rechazadas por un bloque independiente de verificación \cite{bitacora}. La separación entre codificación y validación permite simplificar la lógica del codificador y restringir el almacenamiento de datos a entradas previamente verificadas \cite{bitacora}.
+
+La temporización se implementa mediante un NE555 en configuración astable, mientras que un SN74HC14 aporta entradas con disparador Schmitt para acondicionar señales afectadas por transiciones lentas o rebotes \cite{ne555,hc14}. Un SN74HC393 se emplea para generar y contar pulsos, un 74HC4052 para seleccionar secuencialmente los bits de cada dígito y tres etapas de CD4015 para almacenar los nueve bits de la contraseña \cite{hc393,hc4052,cd4015}. Finalmente, un controlador de estados determina el movimiento de la puerta y un 74HC238 decodifica el estado para informar al usuario mediante un display de siete segmentos \cite{hc238}.
+
+El documento se organiza de la siguiente manera: primero se describe el algoritmo desarrollado y la arquitectura funcional; posteriormente se presentan los resultados de simulación; finalmente se exponen las conclusiones y recomendaciones derivadas del diseño.
+
+\section{Algoritmo desarrollado}
+
+La lógica desarrollada se dividió en siete funciones principales: codificación de señas, verificación de entradas, generación de reloj, serialización y almacenamiento, conteo de dígitos, control de estados y decodificación de anuncios. Esta partición permite verificar cada función de manera independiente y conservar una correspondencia directa entre las reglas del sistema y su implementación física \cite{bitacora}.
+
+\subsection{Codificación y validación de señas}
+El ENCODER recibe $S_1,S_2,S_3,S_4$ y produce un valor de tres bits $(B_2,B_1,B_0)$ para las cinco señas aceptadas. La minimización mediante mapas de Karnaugh, utilizando las 11 combinaciones inválidas como condiciones libres, produjo:
+\begin{equation}
+B_0=S_1S_2+S_3S_4,
+\end{equation}
+\begin{equation}
+B_1=S_2S_4,
+\end{equation}
+\begin{equation}
+B_2=S_4.
+\end{equation}
+
+El VERIFIER comprueba que ningún dedo se encuentre levantado sin que el dedo anterior también lo esté. La condición de validez puede expresarse como
+\begin{equation}
+\mathrm{VALID}=(S_1+S_2)(S_2+S_3)(S_3+S_4),
+\end{equation}
+por lo que la señal de rechazo queda
+\begin{equation}
+\mathrm{INVALID}=S_1S_2+S_2S_3+S_3S_4.
+\end{equation}
+La señal INVALID se utiliza posteriormente para bloquear el almacenamiento de una seña no válida.
+
+\subsection{Temporización y serialización}
+El botón de confirmación se acondiciona mediante una red RC y un disparador Schmitt. El SN74HC14 incorpora seis inversores con entradas Schmitt, adecuados para regenerar señales con transiciones lentas o ruidosas \cite{hc14}. El reloj principal se obtiene con un NE555 en configuración astable, para el cual se documentó una frecuencia aproximada de 686~Hz con $R_1=1$~k$\Omega$, $R_2=10$~k$\Omega$ y $C_1=100$~nF. La frecuencia del temporizador se relaciona con dichos elementos mediante \cite{ne555}
+\begin{equation}
+f\approx\frac{1.44}{(R_1+2R_2)C_1}.
+\end{equation}
+
+El SN74HC393 aporta un contador binario de cuatro bits y permite reutilizar sus salidas para detectar el tercer pulso y generar la señal DONE \cite{hc393}. El reloj que llega a los registros se filtra mediante
+\begin{equation}
+\mathrm{FILTERED\_CLK}=\mathrm{CLK}\cdot\overline{\mathrm{INVALID}},
+\end{equation}
+por lo que una seña inválida no puede desplazar información hacia la memoria.
+
+El 74HC4052 actúa como multiplexor 4:1 con dos líneas de selección, permitiendo escoger $B_0$, $B_1$ y $B_2$ en secuencia \cite{hc4052}. Las tres mitades utilizadas de los CD4015 forman una cadena de nueve etapas, suficiente para almacenar los tres dígitos de tres bits cada uno \cite{cd4015}. Debido al desplazamiento sucesivo, el primer dígito ingresado termina en las etapas más alejadas de la entrada, de manera que la correspondencia de salidas se fija explícitamente antes de realizar la comparación \cite{bitacora}.
+
+\subsection{Control de estados y anuncio}
+El controlador utiliza dos bits, $E_1$ y $E_0$, y diferencia cuatro situaciones: lectura, seña inválida, apertura y cierre. Sus ecuaciones son
+\begin{equation}
+E_1=\mathrm{COMPLETE?}\cdot\mathrm{CORRECT?},
+\end{equation}
+\begin{equation}
+E_0=\mathrm{COMPLETE?}\cdot(\mathrm{OPENED?}+\mathrm{CORRECT?}).
+\end{equation}
+
+La interpretación de los estados se resume en la Tabla~\ref{tab:states}. El movimiento hacia el motor se mantiene mutuamente excluyente mediante
+\begin{equation}
+\mathrm{OPENING}=E_1\cdot\overline{\mathrm{OPENED?}},
+\end{equation}
+\begin{equation}
+\mathrm{CLOSING}=E_1\cdot\mathrm{OPENED?}.
+\end{equation}
+
+\begin{table}[t]
+\caption{Estados del controlador.}
+\label{tab:states}
+\centering
+\small
+\begin{tabular}{c l}
+\toprule
+$E_1E_0$ & Situación \\
+\midrule
+00 & Leyendo \\
+01 & Seña inválida \\
+10 & Abriendo \\
+11 & Cerrando \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Para anunciar el estado se emplea un decodificador 74HC238, que activa una salida exclusiva de acuerdo con su entrada binaria \cite{hc238}. Dichas salidas se combinan para encender las letras L, E, A y C en el display de siete segmentos, correspondientes a los cuatro estados definidos \cite{bitacora}.
+
+\section{Resultados}
+La validación se realizó mediante simulaciones en Proteus a nivel de cada bloque y del sistema integrado. En el codificador se recorrieron las cinco señas válidas y cada salida coincidió con el valor de tres bits esperado. En el verificador se probaron las 16 combinaciones de entrada, con cero falsos aceptados dentro del conjunto de pruebas documentado: las cinco señas válidas mantuvieron INVALID en cero y las once combinaciones restantes lo elevaron \cite{bitacora}.
+
+El bloque de reloj produjo exactamente tres flancos por pulsación, independientemente del tiempo de permanencia del botón. La señal DONE permitió detener la ráfaga y, posteriormente, generar un evento reutilizable para el conteo de dígitos \cite{bitacora}. En la cadena de almacenamiento se verificó el orden de los nueve bits utilizando la contraseña de referencia 2-4-1, donde los valores binarios 010, 100 y 001 quedaron distribuidos en las etapas conforme a la secuencia de desplazamiento esperada \cite{bitacora}.
+
+La Tabla~\ref{tab:tests} resume las pruebas funcionales registradas. En el controlador se recorrieron los cuatro estados y el display mostró la letra correspondiente en cada uno. Además, las salidas OPENING y CLOSING no se activaron simultáneamente. La simulación también confirmó que, después de una contraseña incorrecta, el sistema podía volver al estado de lectura y aceptar una nueva secuencia tras la siguiente pulsación \cite{bitacora}.
+
+\begin{table}[t]
+\caption{Resumen de pruebas de simulación.}
+\label{tab:tests}
+\centering
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.39\columnwidth} >{\raggedright\arraybackslash}p{0.47\columnwidth}}
+\toprule
+Prueba & Resultado documentado \\
+\midrule
+Encoder: 5 señas válidas & 5/5 coincidieron con la tabla \\
+Verifier: 16 combinaciones & 16/16 clasificadas correctamente \\
+Reloj: una pulsación & 3 pulsos, sin excedentes \\
+Registro: contraseña 2-4-1 & Orden de 9 bits confirmado \\
+Controlador y display & 4 estados correctamente mostrados \\
+Motor lógico & OPENING y CLOSING mutuamente excluyentes \\
+Recuperación tras error & Nueva captura posterior confirmada \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Conclusiones}
+El diseño demuestra que la funcionalidad especificada para el cerrojo puede implementarse mediante una arquitectura modular de lógica CMOS, sin concentrar todas las decisiones en un único bloque. La división entre codificación, validación, temporización, almacenamiento y control facilita el trazado de señales y permite verificar cada etapa antes de realizar la integración física. La utilización de las condiciones inválidas como condiciones libres redujo de manera importante la complejidad del codificador, mientras que la reutilización del contador disponible evitó incorporar un contador adicional para seleccionar los bits del multiplexor \cite{bitacora}.
+
+Los resultados de simulación respaldan el comportamiento funcional descrito en la especificación: las entradas válidas fueron codificadas correctamente, las combinaciones inválidas fueron rechazadas, cada confirmación generó tres pulsos, la contraseña de nueve bits fue almacenada en el orden previsto y el controlador respondió a los cuatro estados. La detección del error de sincronización y su corrección mediante el reinicio monoestable del contador muestran además que la verificación a nivel de sistema fue necesaria para garantizar la coherencia entre el registro de desplazamiento y el conteo de dígitos \cite{bitacora}.
+
+\section{Recomendaciones}
+Antes del montaje físico se recomienda conservar la separación por bloques utilizada durante la simulación y validar nuevamente las señales de interfaz entre cada módulo, en particular FILTERED\_CLK, DONE, COMPLETE? y OPENED?. También resulta conveniente mantener una tabla única de correspondencia entre etapas del CD4015 y bits de la contraseña, debido a que el orden físico de las salidas no coincide de forma intuitiva con el orden de ingreso \cite{bitacora}.
+
+Como siguiente etapa de desarrollo se recomienda verificar experimentalmente los tiempos del antirrebote, la frecuencia real del oscilador y el comportamiento de los finales de carrera bajo las tolerancias de los componentes. La documentación de los dispositivos seleccionados debe utilizarse como referencia para comprobar niveles lógicos, alimentación y condiciones de operación durante el ensamblaje \cite{hc14,hc393,hc4052,hc238,cd4015}.
+
+\begin{thebibliography}{7}
+
+\bibitem{bitacora}
+G. Sánchez Cedeño y K. Fernández Obando, ``Bitácora del Proyecto: Cerrojo,'' CE1107: Fundamentos de Arquitectura de Computadores, Instituto Tecnológico de Costa Rica, II semestre, 2026.
+
+\bibitem{ne555}
+Texas Instruments, ``xx555 Precision Timers Data Sheet,'' Rev. K, Mar. 2026. [Online]. Available: \url{https://www.ti.com/lit/ds/symlink/ne555.pdf}
+
+\bibitem{hc14}
+Texas Instruments, ``SNx4HC14 Hex Inverters with Schmitt-Trigger Inputs Data Sheet,'' Rev. L, Feb. 2025. [Online]. Available: \url{https://www.ti.com/lit/ds/symlink/sn74hc14.pdf}
+
+\bibitem{hc393}
+Texas Instruments, ``SNx4HC393 Dual 4-Bit Binary Counters Data Sheet,'' Rev. E, Dec. 2024. [Online]. Available: \url{https://www.ti.com/lit/ds/symlink/sn74hc393.pdf}
+
+\bibitem{hc4052}
+Nexperia, ``74HC4052; 74HCT4052: Dual 4-channel analog multiplexer/demultiplexer,'' Product Data Sheet, Mar. 2024. [Online]. Available: \url{https://assets.nexperia.com/documents/data-sheet/74HC_HCT4052.pdf}
+
+\bibitem{cd4015}
+Renesas Electronics, ``CD4015BMS Datasheet: CMOS Dual 4-Stage Static Shift Register with Serial Input/Parallel Output,'' Rev. 0.00, Dec. 1992. [Online]. Available: \url{https://www.renesas.com/en/document/dst/cd4015bms-datasheet}
+
+\bibitem{hc238}
+Nexperia, ``74HC238; 74HCT238: 3-to-8 line decoder/demultiplexer,'' Rev. 8, Mar. 21, 2024. [Online]. Available: \url{https://assets.nexperia.com/documents/data-sheet/74HC_HCT238.pdf}
+
+\end{thebibliography}
+
+\end{document}
