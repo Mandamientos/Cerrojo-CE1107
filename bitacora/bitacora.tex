@@ -7,6 +7,7 @@
 \usepackage{amsmath}
 \usepackage{float}
 \usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
 
 \renewcommand{\contentsname}{Índice}
 \renewcommand{\figurename}{Figura}
@@ -591,6 +592,32 @@ la simulación las nueve salidas tenían que quedar exactamente como dice la tab
 así fue, con lo cual quedamos seguros de que el orden que dedujimos es el correcto
 y ya podemos utilizar estas etiquetas para armar el comparador de la contraseña.
 
+\subsection{Comparador de contraseñas}
+
+El comparador es el bloque encargado de revisar si los nueve bits que el serializador guardó en los registros corresponden a la contraseña correcta. Para este proyecto, el cerrojo tiene dos contraseñas distintas dependiendo de lo que el usuario quiera hacer: para abrir la puerta es 2-4-1, y para cerrarla es 2-4-3.
+
+En primera instancia pensábamos armar dos comparadores por aparte y elegir cuál usar dependiendo del estado de la puerta, pero al analizar los bits de las dos contraseñas nos dimos cuenta de que son casi idénticos. Si revisamos los valores, el dígito 1 (2) y el dígito 2 (4) son iguales en ambas. En el caso del dígito 3, el 1 es binario 001 y el 3 es 011. La única diferencia entre las dos contraseñas es el bit $B_1$ del tercer dígito, el cual según la tabla que armamos corresponde a la etapa conectada a $R_8$. 
+
+Para abrir la puerta (cuando la señal OPEN? está en 0), necesitamos que la contraseña sea 2-4-1, por lo que $R_8$ debe ser 0. Para cerrar la puerta (cuando OPEN? está en 1), necesitamos que sea 2-4-3, es decir que $R_8$ debe ser 1. Es por ello que se decidió a utilizar una única compuerta XNOR 4077, la cual compara $R_8$ directamente con la señal OPEN?. Dado a que la compuerta XNOR produce un 1 lógico solo cuando ambas entradas son iguales, esta nos resuelve la validación dual sin necesidad de duplicar el circuito completo.
+
+El resto de las salidas del registro ($R_1$ a $R_7$) se pasan por inversores 74HC14 en los casos donde el bit esperado es un 0, esto para que todos los caminos entreguen un 1 lógico cuando la contraseña ingresada es la correcta. Posteriormente, se multiplican todas estas señales, junto a la salida de la XNOR y a $R_9$ (que es 1 en ambas contraseñas y pasa directo), utilizando un árbol de compuertas AND. 
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{img/comparador-interno.png}
+  \caption{Interior del subcircuito PSW\_CHECKER, con la compuerta XNOR para el bit $R_8$ y el árbol de compuertas AND.}
+\end{figure}
+
+Cabe destacar que el árbol de compuertas AND resulta ser muy grande y ocupa bastantes integrados. Como observación para el momento de armar el circuito en físico, nos dimos cuenta de que esto se puede reemplazar por una compuerta NAND de 8 entradas, a la cual le conectamos las señales desde $R_1$ hasta $R_8$ (pasadas por la lógica mencionada), seguida de un inversor y una última compuerta AND con la señal de $R_9$. Esto nos ahorraría una cantidad importante de espacio en las protoboards, además aunado a ello reduce la cantidad de cables.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.45\textwidth]{img/comparador-bloque.png}
+  \caption{Bloque PSW\_CHECKER visto desde el exterior, con las entradas de los registros y la señal OPEN?.}
+\end{figure}
+
+Con el comparador terminado, la señal CORRECT? ya está lista para avisarle al resto del sistema si la seña ingresada sirve o no para mover el motor.
+
 \section{13 de septiembre de 2026}
 
 \subsection{Controlador de estados}
@@ -777,5 +804,29 @@ tercer disparo al monoestable.
 
 Con esto el diseño digital del cerrojo queda completo, lo que permite empezar a
 repartir el trabajo para armarlo en físico.
+
+\newpage
+\section{Repositorio de GitHub}
+
+El código fuente, los esquemáticos de Proteus y demás recursos de este proyecto se encuentran alojados en el siguiente repositorio:
+
+\url{https://github.com/Mandamientos/Cerrojo-CE1107}
+
+\renewcommand{\refname}{Referencias Bibliográficas}
+\begin{thebibliography}{9}
+
+\bibitem{ne555}
+Texas Instruments. (2014). \textit{NE555 Precision Timers}. Datasheet. 
+
+\bibitem{hc14}
+Texas Instruments. (2004). \textit{SN74HC14 Hex Schmitt-Trigger Inverters}. Datasheet. 
+
+\bibitem{cd4015}
+Texas Instruments. (2003). \textit{CD4015B CMOS Dual 4-Stage Static Shift Register}. Datasheet. 
+
+\bibitem{proteus}
+Labcenter Electronics. \textit{Proteus Design Suite}. Software de automatización de diseño electrónico y simulación de circuitos.
+
+\end{thebibliography}
 
 \end{document}
